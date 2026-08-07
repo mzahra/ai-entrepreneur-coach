@@ -265,7 +265,9 @@ def rank_business_ideas(structured_profile: dict, big_five_scores: dict, budget_
 
 # --- Step 7: output report ---
 
-def generate_output_report(client, structured_profile: dict, big_five_scores: dict, budget_eur: float, time_available_hours_per_week: float, grounded_top_ideas: list) -> dict:
+def generate_output_report(client, structured_profile: dict, big_five_scores: dict, budget_eur: float, time_available_hours_per_week: float, grounded_top_ideas: list, roadmap_idea_id: str = None) -> dict:
+    roadmap_idea = next((r for r in grounded_top_ideas if r["id"] == roadmap_idea_id), grounded_top_ideas[0])
+
     report_input = f"""User profile:
 Name: {structured_profile['name']}
 Industry: {structured_profile['industry']}
@@ -279,6 +281,9 @@ Time available: {time_available_hours_per_week} hours/week
 
 Top ranked business ideas (already ranked and scored, do not change the ranking or invent a different fit number):
 {json.dumps(grounded_top_ideas, indent=2)}
+
+Reminder: idea_rationales must contain exactly {len(grounded_top_ideas)} entries, one for EACH of these ids: {[r['id'] for r in grounded_top_ideas]}, do not skip any of them.
+The 90 day roadmap (roadmap_90_day) is ONLY for the idea the user picked, id "{roadmap_idea['id']}", name "{roadmap_idea['name']}", not for the others.
 """
     response = client.responses.create(
         model="gpt-4o-mini",
@@ -287,11 +292,15 @@ Top ranked business ideas (already ranked and scored, do not change the ranking 
                 "role": "system",
                 "content": (
                     "You write the narrative parts of a business idea recommendation report. "
+                    "Address the person directly as \"you\"/\"your\" throughout, like a coach talking to them, not by their name and not in the third person "
+                    "(write \"you should focus on...\", not \"Zahra should focus on...\"). "
                     "The fit percentages are already computed, do not change or restate them as your own judgment. "
                     "working_style_summary: 2 to 4 sentences on the person's working style, based on their Big Five scores and experience. "
-                    "idea_rationales: for EACH idea given, one entry with a 1 to 2 sentence rationale that references at least two concrete "
-                    "things from the data (matched_skills and/or in_range_traits, name the trait), do not invent skills or traits not present in the data. "
-                    "roadmap_90_day: a 90 day roadmap ONLY for the first (top ranked) idea in the list, one entry per phase (days_1_30, days_31_60, days_61_90). "
+                    "idea_rationales: one entry for EVERY idea in the list, all of them, not just the one the user picked for the roadmap, "
+                    "each a 1 to 2 sentence rationale that references at least two concrete things from the data (matched_skills and/or "
+                    "in_range_traits, name the trait), do not invent skills or traits not present in the data. "
+                    "roadmap_90_day: a 90 day roadmap ONLY for the idea the user picked, identified at the end of the user message by its id and name, "
+                    "not necessarily the top ranked one, one entry per phase (days_1_30, days_31_60, days_61_90). "
                     "Each phase should be a full paragraph (5 to 8 sentences), not a one-liner: include concrete first actions, and name specific "
                     "real world places or platforms the person could actually use (for example Upwork, Fiverr, LinkedIn, local meetup or coworking groups, "
                     "relevant subreddits or Slack/Discord communities, industry conferences), matched to the idea's category."
@@ -313,8 +322,9 @@ def sanitize_for_pdf(text: str) -> str:
     return text.encode("latin-1", "replace").decode("latin-1")
 
 
-def export_report_pdf(structured_profile: dict, report_narrative: dict, grounded_top_ideas: list, output_path: str) -> str:
+def export_report_pdf(structured_profile: dict, report_narrative: dict, grounded_top_ideas: list, output_path: str, roadmap_idea_id: str = None) -> str:
     rationales_by_id = {r["id"]: r["rationale"] for r in report_narrative["idea_rationales"]}
+    roadmap_idea = next((r for r in grounded_top_ideas if r["id"] == roadmap_idea_id), grounded_top_ideas[0])
 
     pdf = FPDF()
     pdf.add_page()
@@ -344,7 +354,7 @@ def export_report_pdf(structured_profile: dict, report_narrative: dict, grounded
         body(rationales_by_id.get(r["id"], ""))
         pdf.ln(2)
 
-    heading(f"90 day roadmap: {grounded_top_ideas[0]['name']}")
+    heading(f"90 day roadmap: {roadmap_idea['name']}")
     heading("Days 1-30", size=11)
     body(report_narrative["roadmap_90_day"]["days_1_30"])
     heading("Days 31-60", size=11)
@@ -359,13 +369,13 @@ def export_report_pdf(structured_profile: dict, report_narrative: dict, grounded
 
 # --- full pipeline, glues every step together ---
 
-def run_full_pipeline(client, pdf_path: str, tipi_answers: dict, budget_eur: float, time_available_hours_per_week: float, output_pdf_path: str = "output/entrepreneur_coach_report.pdf") -> dict:
+def run_full_pipeline(client, pdf_path: str, tipi_answers: dict, budget_eur: float, time_available_hours_per_week: float, output_pdf_path: str = "output/entrepreneur_coach_report.pdf", roadmap_idea_id: str = None) -> dict:
     profile_sections, profile_header = parse_profile_pdf(pdf_path)
     structured_profile = extract_structured_profile(client, profile_sections, profile_header)
     big_five_scores = score_tipi(tipi_answers)
     grounded_top_ideas = rank_business_ideas(structured_profile, big_five_scores, budget_eur, time_available_hours_per_week)
-    report_narrative = generate_output_report(client, structured_profile, big_five_scores, budget_eur, time_available_hours_per_week, grounded_top_ideas)
-    pdf_path_out = export_report_pdf(structured_profile, report_narrative, grounded_top_ideas, output_pdf_path)
+    report_narrative = generate_output_report(client, structured_profile, big_five_scores, budget_eur, time_available_hours_per_week, grounded_top_ideas, roadmap_idea_id)
+    pdf_path_out = export_report_pdf(structured_profile, report_narrative, grounded_top_ideas, output_pdf_path, roadmap_idea_id)
     return {
         "structured_profile": structured_profile,
         "big_five_scores": big_five_scores,
