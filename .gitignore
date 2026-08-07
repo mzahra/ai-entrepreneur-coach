@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.pytest_cache/
+.vscode/
+extra_info/
+.gradio/
+.claude/

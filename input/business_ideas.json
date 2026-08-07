@@ -1,0 +1,98 @@
+[
+  {
+    "id": "idea_001",
+    "name": "Freelance Data Engineering / Data Warehousing Consulting",
+    "description": "Help small and mid-size companies design pipelines, data models, and warehouses on a contract basis.",
+    "category": "tech / consulting",
+    "budget_range_eur": [0, 500],
+    "time_range_hours_per_week": [10, 25],
+    "risk_level": "low",
+    "skills_needed": ["data engineering", "data modeling", "SQL", "cloud platforms", "communication"],
+    "ideal_traits": {"openness": [4, 7], "conscientiousness": [5, 7], "extraversion": [1, 5], "agreeableness": [3, 7], "neuroticism": [1, 4]},
+    "source_note": "Hand curated entry for the lab MVP, based on common freelance consulting patterns"
+  },
+  {
+    "id": "idea_002",
+    "name": "Online Course Creator / Technical Instructor",
+    "description": "Package expertise into a paid online course or cohort based workshop.",
+    "category": "education",
+    "budget_range_eur": [0, 300],
+    "time_range_hours_per_week": [8, 20],
+    "risk_level": "low",
+    "skills_needed": ["teaching", "communication", "subject matter expertise", "content creation"],
+    "ideal_traits": {"openness": [4, 7], "conscientiousness": [4, 7], "extraversion": [3, 7], "agreeableness": [3, 7], "neuroticism": [1, 4]},
+    "source_note": "Hand curated entry for the lab MVP, based on common online education business patterns"
+  },
+  {
+    "id": "idea_003",
+    "name": "Freelance Technical Writing / Documentation Service",
+    "description": "Write documentation, guides, or blog content for companies who don't have in house writers.",
+    "category": "writing / services",
+    "budget_range_eur": [0, 300],
+    "time_range_hours_per_week": [5, 15],
+    "risk_level": "low",
+    "skills_needed": ["writing", "research", "communication"],
+    "ideal_traits": {"openness": [4, 7], "conscientiousness": [5, 7], "extraversion": [1, 4], "agreeableness": [2, 7], "neuroticism": [1, 5]},
+    "source_note": "Hand curated entry for the lab MVP, based on common low cost freelance service patterns"
+  },
+  {
+    "id": "idea_004",
+    "name": "Social Media Management for Local Businesses",
+    "description": "Run social media accounts and light marketing for local shops and services.",
+    "category": "marketing / services",
+    "budget_range_eur": [100, 500],
+    "time_range_hours_per_week": [8, 15],
+    "risk_level": "medium",
+    "skills_needed": ["communication", "creativity", "organization", "basic marketing"],
+    "ideal_traits": {"openness": [4, 7], "conscientiousness": [3, 6], "extraversion": [4, 7], "agreeableness": [4, 7], "neuroticism": [1, 5]},
+    "source_note": "Hand curated entry for the lab MVP, based on common local marketing service patterns"
+  },
+  {
+    "id": "idea_005",
+    "name": "Handmade Goods / Craft Shop on Etsy",
+    "description": "Design and sell handmade or print on demand goods through an online craft marketplace.",
+    "category": "creative / e-commerce",
+    "budget_range_eur": [200, 1000],
+    "time_range_hours_per_week": [10, 20],
+    "risk_level": "medium",
+    "skills_needed": ["craftsmanship", "creativity", "basic e-commerce"],
+    "ideal_traits": {"openness": [5, 7], "conscientiousness": [3, 6], "extraversion": [1, 5], "agreeableness": [3, 7], "neuroticism": [1, 5]},
+    "source_note": "Hand curated entry for the lab MVP, based on common creative e-commerce patterns"
+  },
+  {
+    "id": "idea_006",
+    "name": "Pet Sitting / Dog Walking Service",
+    "description": "Provide pet care for busy pet owners in the local area.",
+    "category": "local services",
+    "budget_range_eur": [0, 200],
+    "time_range_hours_per_week": [10, 25],
+    "risk_level": "low",
+    "skills_needed": ["reliability", "physical stamina", "communication"],
+    "ideal_traits": {"openness": [1, 5], "conscientiousness": [4, 7], "extraversion": [2, 6], "agreeableness": [5, 7], "neuroticism": [1, 5]},
+    "source_note": "Hand curated entry for the lab MVP, based on common local service business patterns"
+  },
+  {
+    "id": "idea_007",
+    "name": "Meal Prep / Small Batch Food Service",
+    "description": "Prepare and sell meals or baked goods on a small, local scale.",
+    "category": "food / local services",
+    "budget_range_eur": [500, 2000],
+    "time_range_hours_per_week": [15, 30],
+    "risk_level": "high",
+    "skills_needed": ["cooking", "food safety", "organization", "local marketing"],
+    "ideal_traits": {"openness": [3, 6], "conscientiousness": [5, 7], "extraversion": [3, 7], "agreeableness": [4, 7], "neuroticism": [1, 4]},
+    "source_note": "Hand curated entry for the lab MVP, based on common small food business patterns"
+  },
+  {
+    "id": "idea_008",
+    "name": "No-Code Automation / Workflow Consulting for Small Businesses",
+    "description": "Help small businesses automate manual processes using no-code tools.",
+    "category": "tech / consulting",
+    "budget_range_eur": [0, 300],
+    "time_range_hours_per_week": [8, 20],
+    "risk_level": "low",
+    "skills_needed": ["process analysis", "no-code tools", "communication", "problem solving"],
+    "ideal_traits": {"openness": [4, 7], "conscientiousness": [4, 7], "extraversion": [2, 6], "agreeableness": [3, 7], "neuroticism": [1, 4]},
+    "source_note": "Hand curated entry for the lab MVP, based on common automation consulting patterns"
+  }
+]
