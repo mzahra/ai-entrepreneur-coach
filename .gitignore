@@ -8,3 +8,4 @@ __pycache__/
 extra_info/
 .gradio/
 .claude/
+input/

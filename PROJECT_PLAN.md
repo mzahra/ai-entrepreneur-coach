@@ -20,7 +20,11 @@
 
 - **Core LLM:** OpenAI
 - **RAG components:** Cohere embeddings, **Pinecone**: vector DB to store the curated business idea knowledge base
-- **Agent framework:** LangGraph, chosen over a plain LangChain ReAct agent because the flow is a fixed sequence (parse, extract, retrieve, rank by career best fit, explain), not something the model should decide on its own, and LangGraph let us checkpoint each step for the Verify requirement
+- **Agent framework:** LangGraph, chosen over a plain LangChain ReAct agent because the flow is a fixed sequence (parse, extract, retrieve, rank by career best fit, explain), not something the model should decide on its own, and LangGraph let us checkpoint each step for the Verify requirement. For this fixed flow, a plain chain of Python function calls would give the same result today, LangGraph is worth it for what it enables beyond that:
+  - **Conditional branching:** a graph edge can route based on the data, for example retry retrieval with a different query if candidates come back empty, not easy to express as cleanly with plain function calls
+  - **Checkpointing and resume:** a compiled graph with a checkpointer can resume from the last completed step if a run crashes mid way, instead of restarting from the beginning
+  - **Human in the loop:** `interrupt()` can pause a graph mid run for real user input, right now we work around this with two separate graphs (one for ranking, one for the report), split at the point the user picks an idea
+  - **Tracing and visualization:** the graph structure itself can be drawn and traced (for example with LangSmith), useful for debugging and for showing the pipeline in the presentation
 - **Orchestration:** none, standalone Python app with a Gradio UI
 - **Tools/integrations:** none for MVP, could add a domain name availability check as a stretch goal later
 
@@ -97,8 +101,9 @@
 ## 5. Implementation Plan
 
 **Phase 1: Setup and data preparation**
-- Lab MVP: prove the critical path with a hardcoded idea list
-- Project 3 start: build the real curated business idea dataset, set up Pinecone index, set up Cohere embeddings
+- build the real curated business idea dataset
+- set up Pinecone index
+- set up Cohere embeddings
 
 **Phase 2: Core agent development**
 - Build the LangGraph pipeline: parse, extract, combine traits, retrieve, rank by career best fit, explain
@@ -109,10 +114,9 @@
 - Test with multiple real resumes/LinkedIn exports and profiles
 - Check recommendations against the success metrics rubric
 
-**Phase 4: Deployment and monitoring**
-- Decide on hosting for the Gradio app
-- If hosted and persistent, confirm Pinecone is fully wired in (this is the deployment decision that justifies Pinecone over local Chroma)
-- Prepare the half day presentation, live demo with real input
+**Phase 4: QA and presentation**
+- QA pass: run the full pipeline end to end with several fresh test profiles, check edge cases (missing PDF sections, extreme trait scores, no skill matches), confirm Pinecone retrieval stays grounded (recommendations trace back to a real retrieved idea, not invented)
+- Prepare the presentation, live demo
 
 ## 6. Success Metrics
 
