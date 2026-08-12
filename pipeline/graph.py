@@ -6,7 +6,7 @@ from .profile_parsing import parse_profile_pdf
 from .profile_extraction import extract_structured_profile
 from .personality import score_tipi
 from .matching import retrieve_candidate_ideas, compute_skill_fits, compute_career_best_fit, matched_skills, in_range_traits
-from .reporting import generate_output_report, export_report_pdf, export_report_html
+from .reporting import generate_output_report, export_report_pdf, export_report_html, build_report_filename
 
 # --- LangGraph pipeline, wires the functions above into two graphs ---
 # Split at the point the user picks which idea to get a roadmap for: the recommendation
@@ -35,6 +35,7 @@ class CoachingState(TypedDict):
     time_available_hours_per_week: float
     grounded_top_ideas: list
     roadmap_idea_id: Optional[str]
+    feedback_history: Optional[list]
     report_narrative: dict
     pdf_path: str
     html_path: str
@@ -102,21 +103,31 @@ def build_coaching_graph(client):
         report_narrative = generate_output_report(
             client, state["structured_profile"], state["big_five_scores"],
             state["budget_eur"], state["time_available_hours_per_week"],
-            state["grounded_top_ideas"], state.get("roadmap_idea_id"),
+            state["grounded_top_ideas"], state.get("roadmap_idea_id"), state.get("feedback_history"),
         )
         return {"report_narrative": report_narrative}
 
     def node_export_pdf(state: CoachingState) -> dict:
+        roadmap_idea = next(
+            (r for r in state["grounded_top_ideas"] if r["id"] == state.get("roadmap_idea_id")),
+            state["grounded_top_ideas"][0],
+        )
+        filename = build_report_filename(state["structured_profile"]["name"], roadmap_idea["name"], "pdf")
         pdf_path = export_report_pdf(
             state["structured_profile"], state["report_narrative"], state["grounded_top_ideas"],
-            "output/entrepreneur_coach_report.pdf", state.get("roadmap_idea_id"), state.get("tipi_answers"),
+            f"output/{filename}", state.get("roadmap_idea_id"), state.get("tipi_answers"),
         )
         return {"pdf_path": pdf_path}
 
     def node_export_html(state: CoachingState) -> dict:
+        roadmap_idea = next(
+            (r for r in state["grounded_top_ideas"] if r["id"] == state.get("roadmap_idea_id")),
+            state["grounded_top_ideas"][0],
+        )
+        filename = build_report_filename(state["structured_profile"]["name"], roadmap_idea["name"], "html")
         html_path = export_report_html(
             state["structured_profile"], state["report_narrative"], state["grounded_top_ideas"],
-            "output/entrepreneur_coach_report.html", state.get("roadmap_idea_id"), state.get("tipi_answers"),
+            f"output/{filename}", state.get("roadmap_idea_id"), state.get("tipi_answers"),
         )
         return {"html_path": html_path}
 

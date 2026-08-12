@@ -1,0 +1,9 @@
+openai==2.45.0
+python-dotenv==1.2.2
+pypdf==6.14.2
+fpdf2==2.8.7
+gradio==6.15.1
+cohere==5.21.1
+pinecone==7.3.0
+langgraph==1.2.10
+pandas

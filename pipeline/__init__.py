@@ -55,6 +55,8 @@ from .reporting import (
     sanitize_for_pdf,
     export_report_pdf,
     export_report_html,
+    slugify_filename_part,
+    build_report_filename,
 )
 
 from .graph import (

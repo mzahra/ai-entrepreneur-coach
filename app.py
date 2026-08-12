@@ -56,32 +56,7 @@ def rank_ideas(pdf_file, budget_eur, time_available_hours_per_week, *tipi_rating
     return "\n".join(lines), gr.update(choices=idea_choices, value=idea_choices[0][1]), state
 
 
-def generate_coaching_report(selected_idea_id, state):
-    if state is None:
-        return "Please rank your ideas first.", None, None
-
-    gr.Info("Writing your coaching report and 90 day roadmap, this takes about 15 to 20 seconds...")
-
-    structured_profile = state["structured_profile"]
-    big_five_scores = state["big_five_scores"]
-    tipi_answers = state["tipi_answers"]
-    grounded_top_ideas = state["grounded_top_ideas"]
-
-    coaching_result = coaching_graph.invoke({
-        "structured_profile": structured_profile,
-        "big_five_scores": big_five_scores,
-        "tipi_answers": tipi_answers,
-        "budget_eur": state["budget_eur"],
-        "time_available_hours_per_week": state["time_available_hours_per_week"],
-        "grounded_top_ideas": grounded_top_ideas,
-        "roadmap_idea_id": selected_idea_id,
-    })
-    report_narrative = coaching_result["report_narrative"]
-    pdf_path = coaching_result["pdf_path"]
-    html_path = coaching_result["html_path"]
-
-    roadmap_idea = next((r for r in grounded_top_ideas if r["id"] == selected_idea_id), grounded_top_ideas[0])
-
+def build_report_markdown(structured_profile, tipi_answers, grounded_top_ideas, report_narrative, roadmap_idea):
     lines = [f"# AI Entrepreneur Coach report for {structured_profile['name']}\n"]
     lines.append("## Working style summary\n")
     lines.append(report_narrative["working_style_summary"] + "\n")
@@ -123,7 +98,88 @@ def generate_coaching_report(selected_idea_id, state):
         lines.append(f"| **Phase total** | **{total_hours:.1f}** | **{total_cost:.0f}** |")
         lines.append("")
 
-    return "\n".join(lines), pdf_path, html_path
+    return "\n".join(lines)
+
+
+def generate_coaching_report(selected_idea_id, state):
+    if state is None:
+        return "Please rank your ideas first.", None, None, None
+
+    gr.Info("Writing your coaching report and 90 day roadmap, this takes about 15 to 20 seconds...")
+
+    structured_profile = state["structured_profile"]
+    big_five_scores = state["big_five_scores"]
+    tipi_answers = state["tipi_answers"]
+    grounded_top_ideas = state["grounded_top_ideas"]
+
+    report_state = {
+        "structured_profile": structured_profile,
+        "big_five_scores": big_five_scores,
+        "tipi_answers": tipi_answers,
+        "budget_eur": state["budget_eur"],
+        "time_available_hours_per_week": state["time_available_hours_per_week"],
+        "grounded_top_ideas": grounded_top_ideas,
+        "roadmap_idea_id": selected_idea_id,
+        "feedback_rounds_used": 0,
+        "feedback_history": [],
+    }
+    coaching_result = coaching_graph.invoke(report_state)
+    report_narrative = coaching_result["report_narrative"]
+    pdf_path = coaching_result["pdf_path"]
+    html_path = coaching_result["html_path"]
+
+    roadmap_idea = next((r for r in grounded_top_ideas if r["id"] == selected_idea_id), grounded_top_ideas[0])
+    markdown = build_report_markdown(structured_profile, tipi_answers, grounded_top_ideas, report_narrative, roadmap_idea)
+
+    return markdown, pdf_path, html_path, report_state
+
+
+MAX_FEEDBACK_ROUNDS = 3
+MAX_FEEDBACK_CHARS = 300
+
+
+def regenerate_with_feedback(feedback_text, report_state):
+    # server-side, not just the textbox's max_length, since a direct API call bypasses UI-only limits
+    # and every round is a real OpenAI call, so this is a real cost control, not just a UX nicety.
+    if report_state is None:
+        return "Please generate a report first.", gr.update(), gr.update(), report_state
+    if not feedback_text or not feedback_text.strip():
+        return "Please write some feedback first, then regenerate.", gr.update(), gr.update(), report_state
+    if len(feedback_text) > MAX_FEEDBACK_CHARS:
+        return (
+            f"Your feedback is {len(feedback_text)} characters, please keep it under {MAX_FEEDBACK_CHARS}.",
+            gr.update(), gr.update(), report_state,
+        )
+
+    rounds_used = report_state.get("feedback_rounds_used", 0)
+    if rounds_used >= MAX_FEEDBACK_ROUNDS:
+        return (
+            f"You've used all {MAX_FEEDBACK_ROUNDS} feedback regenerations for this report. "
+            "Rank your ideas again to start a fresh report.",
+            gr.update(), gr.update(), report_state,
+        )
+
+    gr.Info(f"Rewriting your report with your feedback ({rounds_used + 1}/{MAX_FEEDBACK_ROUNDS}), this takes about 15 to 20 seconds...")
+
+    # cumulative: every round so far is sent again, not just this one, so earlier feedback (e.g. "don't
+    # suggest Wix") isn't silently forgotten once a newer, unrelated feedback round comes in
+    feedback_history = report_state.get("feedback_history", []) + [feedback_text]
+
+    coaching_result = coaching_graph.invoke({**report_state, "feedback_history": feedback_history})
+    report_narrative = coaching_result["report_narrative"]
+    pdf_path = coaching_result["pdf_path"]
+    html_path = coaching_result["html_path"]
+
+    grounded_top_ideas = report_state["grounded_top_ideas"]
+    roadmap_idea = next(
+        (r for r in grounded_top_ideas if r["id"] == report_state["roadmap_idea_id"]), grounded_top_ideas[0]
+    )
+    markdown = build_report_markdown(
+        report_state["structured_profile"], report_state["tipi_answers"], grounded_top_ideas, report_narrative, roadmap_idea
+    )
+
+    updated_state = {**report_state, "feedback_rounds_used": rounds_used + 1, "feedback_history": feedback_history}
+    return markdown, pdf_path, html_path, updated_state
 
 
 TIPI_CSS = """
@@ -222,6 +278,22 @@ with gr.Blocks(title="AI Entrepreneur Coach") as demo:
         output_pdf = gr.File(label="Download PDF report")
         output_html = gr.File(label="Download HTML report")
 
+    report_state = gr.State()
+    gr.Markdown(
+        "## Not happy with the report? Give feedback and regenerate\n"
+        "This rewrites the working style summary, idea rationales, and roadmap text based on your feedback. "
+        "It will NOT change the fit percentages, budget, or time ranges above, those come from the actual "
+        f"calculation, not from your feedback. Limited to {MAX_FEEDBACK_ROUNDS} regenerations per report and "
+        f"{MAX_FEEDBACK_CHARS} characters per feedback."
+    )
+    feedback_input = gr.Textbox(
+        label="Your feedback",
+        placeholder="For example: focus more on the low-cost first steps, or make the tone more casual, or I want more freelance platform suggestions.",
+        lines=2,
+        max_length=MAX_FEEDBACK_CHARS,
+    )
+    regenerate_btn = gr.Button("Regenerate with my feedback", variant="primary", elem_classes=["primary-action-btn"])
+
     rank_btn.click(
         rank_ideas,
         inputs=[pdf_input, budget_input, time_input] + tipi_sliders,
@@ -231,7 +303,13 @@ with gr.Blocks(title="AI Entrepreneur Coach") as demo:
     coach_btn.click(
         generate_coaching_report,
         inputs=[idea_selector, coach_state],
-        outputs=[output_markdown, output_pdf, output_html],
+        outputs=[output_markdown, output_pdf, output_html, report_state],
+    )
+
+    regenerate_btn.click(
+        regenerate_with_feedback,
+        inputs=[feedback_input, report_state],
+        outputs=[output_markdown, output_pdf, output_html, report_state],
     )
 
 

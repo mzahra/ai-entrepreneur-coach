@@ -1,10 +1,20 @@
 import os
+import re
 import json
 import html
 
 from fpdf import FPDF
 
 from .personality import TIPI_ITEMS
+
+
+def slugify_filename_part(text: str) -> str:
+    text = re.sub(r"[^\w\s-]", "", text)
+    return re.sub(r"[\s-]+", "_", text.strip())
+
+
+def build_report_filename(user_name: str, idea_name: str, extension: str) -> str:
+    return f"report_{slugify_filename_part(user_name)}_{slugify_filename_part(idea_name)}.{extension}"
 
 
 def _roadmap_phase_schema() -> dict:
@@ -62,8 +72,34 @@ OUTPUT_REPORT_SCHEMA = {
 
 # --- Step 7: output report ---
 
-def generate_output_report(client, structured_profile: dict, big_five_scores: dict, budget_eur: float, time_available_hours_per_week: float, grounded_top_ideas: list, roadmap_idea_id: str = None) -> dict:
+def generate_output_report(client, structured_profile: dict, big_five_scores: dict, budget_eur: float, time_available_hours_per_week: float, grounded_top_ideas: list, roadmap_idea_id: str = None, feedback_history: list = None) -> dict:
     roadmap_idea = next((r for r in grounded_top_ideas if r["id"] == roadmap_idea_id), grounded_top_ideas[0])
+
+    feedback_block = ""
+    if feedback_history:
+        numbered_feedback = "\n".join(f"{i + 1}. {fb}" for i, fb in enumerate(feedback_history))
+        feedback_block = f"""
+The user already saw earlier versions of this report and gave feedback, numbered below in the order they
+gave it. ALL of these still apply together, not just the last one, earlier feedback is not replaced by
+later feedback unless a later point specifically contradicts an earlier one (in that case, follow the more
+recent instruction only for that specific point, everything else from earlier rounds still applies). Use
+this to rewrite the report, but only for tone, emphasis, and which points to focus on, do NOT let it change
+budget_range_eur, time_range_hours_per_week, or career_best_fit_percentage, those are already computed from
+real data, not your judgment.
+
+If the feedback asks for a lower budget or less time than the idea realistically needs: the roadmap must
+still include the real, necessary costs implied by this idea's skills_needed and description (for example
+materials, tools, software, or certifications a person would actually need to do this work, not just
+marketing/setup tasks). Do NOT quietly drop or avoid mentioning a necessary cost just to make the total look
+lower, a roadmap that hits a low number by omitting something the person obviously needs is misleading, not
+helpful. If, even after minimizing everywhere genuinely possible, the total still cannot reach what the user
+asked for, keep the necessary items in and add one clear sentence in the relevant phase summary explaining
+that the real minimum is higher and naming the actual cost driver (for example "materials and tools for
+furniture making cannot be avoided"). Apply everything else in the feedback fully.
+
+User feedback, in order given:
+{numbered_feedback}
+"""
 
     report_input = f"""User profile:
 Name: {structured_profile['name']}
@@ -82,7 +118,7 @@ Top ranked business ideas (already ranked and scored, do not change the ranking 
 Reminder: idea_rationales must contain exactly {len(grounded_top_ideas)} entries, one for EACH of these ids: {[r['id'] for r in grounded_top_ideas]}, do not skip any of them.
 The 90 day roadmap (roadmap_90_day) is ONLY for the idea the user picked, id "{roadmap_idea['id']}", name "{roadmap_idea['name']}", "
 budget_range_eur {roadmap_idea['budget_range_eur']}, time_range_hours_per_week {roadmap_idea['time_range_hours_per_week']}, not for the others.
-"""
+{feedback_block}"""
     response = client.responses.create(
         model="gpt-4o-mini",
         input=[

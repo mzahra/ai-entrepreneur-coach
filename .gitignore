@@ -9,3 +9,4 @@ extra_info/
 .gradio/
 .claude/
 input/
+.DS_Store
