@@ -1,5 +1,13 @@
 import json
 
+CONTENT_SECTIONS = ["Top Skills", "Summary", "Experience", "Projects", "Education"]
+
+
+class ProfileExtractionError(Exception):
+    """Raised when the parsed PDF has no real profile content to extract from, so the model
+    would otherwise be asked to write a structured profile from nothing, and would fabricate one."""
+
+
 STRUCTURED_PROFILE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -17,6 +25,13 @@ STRUCTURED_PROFILE_SCHEMA = {
 # --- Step 3: extract structured profile ---
 
 def extract_structured_profile(client, profile_sections: dict, profile_header: dict) -> dict:
+    has_content = any(profile_sections.get(key, "").strip() for key in CONTENT_SECTIONS)
+    if not has_content and not profile_header:
+        raise ProfileExtractionError(
+            "Could not find any real profile content in this PDF (no skills, summary, experience, "
+            "or education text found). Please upload a PDF with actual resume/profile content."
+        )
+
     extraction_input = f"""Headline: {profile_header.get('headline', '')}
 Location: {profile_header.get('location', '')}
 

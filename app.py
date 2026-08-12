@@ -27,12 +27,16 @@ def rank_ideas(pdf_file, budget_eur, time_available_hours_per_week, *tipi_rating
 
     tipi_answers = {item["id"]: int(rating) for item, rating in zip(pipeline.TIPI_ITEMS, tipi_ratings)}
 
-    recommendation_result = recommendation_graph.invoke({
-        "pdf_path": pdf_file,
-        "tipi_answers": tipi_answers,
-        "budget_eur": budget_eur,
-        "time_available_hours_per_week": time_available_hours_per_week,
-    })
+    try:
+        recommendation_result = recommendation_graph.invoke({
+            "pdf_path": pdf_file,
+            "tipi_answers": tipi_answers,
+            "budget_eur": budget_eur,
+            "time_available_hours_per_week": time_available_hours_per_week,
+        })
+    except (pipeline.ProfilePdfError, pipeline.ProfileExtractionError) as e:
+        return str(e), gr.update(choices=[], value=None), None
+
     structured_profile = recommendation_result["structured_profile"]
     big_five_scores = recommendation_result["big_five_scores"]
     grounded_top_ideas = recommendation_result["grounded_top_ideas"]

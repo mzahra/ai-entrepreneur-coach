@@ -2,13 +2,14 @@
 
 A trait based business idea recommender. Takes a LinkedIn PDF export (or a regular CV), a Big Five personality quiz (TIPI), a budget, and time available, then recommends small business ideas ranked by a computed "career best fit" percentage, each with a grounded rationale and a 90 day roadmap for the one the user picks. The user can also give written feedback and regenerate the report, without changing the underlying computed numbers.
 
-This is the **Project 3** full build (4.5 days). The one day intro lab that came before it is preserved unchanged in `MVP/`. See `PROJECT_PLAN.md` for the full use case, tech stack justification, scope, and risk assessment, `stack_decision.md` for why LangGraph was chosen over n8n, and `gtm_future_sprints.md` for the proposed next steps toward real users.
+This is the **Project 3** full build (4 days). The one day intro lab that came before it is preserved unchanged in `MVP/`. See `PROJECT_PLAN.md` for the full use case, tech stack justification, scope, and risk assessment, `stack_decision.md` for why LangGraph was chosen over n8n, and `gtm_future_sprints.md` for the proposed next steps toward real users.
 
 ## Tool list
 
 | Tool | Role |
 |---|---|
-| OpenAI (`gpt-4o-mini`) | Structured profile extraction from the parsed PDF, TIPI-based working style summary, per-idea rationale, and the 90 day roadmap, all with strict JSON schema outputs |
+| OpenAI (`gpt-4o-mini`) | Structured profile extraction from the parsed PDF, strict JSON schema output, deterministic (`temperature=0`) |
+| OpenAI (`gpt-5.6-luna`) | The report narrative, working style summary, per-idea rationale, and the 90 day roadmap, also strict JSON schema output. Chosen over `gpt-4o-mini` here after a side by side comparison showed noticeably more specific, better researched roadmap text, at a meaningfully higher token cost, worth it for narrative quality but not for the cheaper, more deterministic extraction step |
 | Cohere (`embed-v4.0`) | Embeddings for retrieval (matching a person's profile to business ideas) and for semantic skill matching (replacing literal text matching, which does not work well for real resumes) |
 | Pinecone | Vector database storing 463 business ideas derived from O*NET occupation data, queried by embedding similarity |
 | LangGraph | Orchestrates the fixed step sequence as two graphs (see diagram below), see `stack_decision.md` for why this was chosen over n8n |
@@ -24,13 +25,13 @@ The pipeline is split into two LangGraph graphs, at the point where the app need
 flowchart TD
     subgraph "recommendation_graph"
         A[score_personality<br/>TIPI to Big Five] --> B[parse_pdf<br/>LinkedIn or generic CV]
-        B --> C[extract_profile<br/>OpenAI, structured JSON]
+        B --> C[extract_profile<br/>OpenAI gpt-4o-mini, structured JSON]
         C --> D[retrieve_candidates<br/>Cohere embed + Pinecone query]
         D --> E[rank_by_fit<br/>budget + time + trait + skill fit]
     end
     E -->|user picks one idea| F
     subgraph "coaching_graph"
-        F[generate_report<br/>OpenAI, rationale + 90 day roadmap] --> G[export_pdf]
+        F[generate_report<br/>OpenAI gpt-5.6-luna, rationale + 90 day roadmap] --> G[export_pdf]
         F --> H[export_html]
     end
     F -.->|optional, up to 3 rounds| F
@@ -80,5 +81,5 @@ Then open `http://127.0.0.1:7860`, upload a profile PDF (LinkedIn export or a re
 
 See `PROJECT_PLAN.md` Risk Assessment for the full list. The two biggest:
 
-- Budget and time ranges per business idea are still an AI estimate, O*NET has no data on business startup cost.
+- Budget and time ranges per business idea are still an AI estimate. The AI is guided by two real O*NET signals (`job_zone`, how much training the real job needs, and `typical_work_week_score`, how many hours/week people in that real job tend to work), but O*NET has no direct data on business startup cost or solo side-business time commitment, so those two numbers are a proxy, not a direct measurement.
 - Skill/idea semantic matching (Cohere embeddings) has a natural "noise floor", two unrelated but both professional-sounding skill lists can still score a moderate similarity, not zero.

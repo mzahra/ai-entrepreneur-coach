@@ -115,7 +115,7 @@
 - Check recommendations against the success metrics rubric
 
 **Phase 4: QA and presentation**
-- QA pass: run the full pipeline end to end with several fresh test profiles, check edge cases (missing PDF sections, extreme trait scores, no skill matches), confirm Pinecone retrieval stays grounded (recommendations trace back to a real retrieved idea, not invented)
+- QA pass: **done**, see `lab_proof.md` "QA checks" for the full list of edge cases tested and results, including one real bug found and fixed (an empty/unreadable PDF caused the extraction step to fabricate a fake profile instead of failing clearly)
 - Prepare the presentation, live demo
 
 ## 6. Success Metrics

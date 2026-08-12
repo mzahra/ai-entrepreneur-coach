@@ -7,6 +7,8 @@ from fpdf import FPDF
 
 from .personality import TIPI_ITEMS
 
+REPORT_NARRATIVE_MODEL = "gpt-5.6-luna"
+
 
 def slugify_filename_part(text: str) -> str:
     text = re.sub(r"[^\w\s-]", "", text)
@@ -120,7 +122,7 @@ The 90 day roadmap (roadmap_90_day) is ONLY for the idea the user picked, id "{r
 budget_range_eur {roadmap_idea['budget_range_eur']}, time_range_hours_per_week {roadmap_idea['time_range_hours_per_week']}, not for the others.
 {feedback_block}"""
     response = client.responses.create(
-        model="gpt-4o-mini",
+        model=REPORT_NARRATIVE_MODEL,
         input=[
             {
                 "role": "system",
@@ -250,6 +252,13 @@ def export_report_pdf(structured_profile: dict, report_narrative: dict, grounded
             total_row.cell(f"{total_cost:.0f}")
         pdf.ln(3)
 
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.set_text_color(120, 120, 120)
+    pdf.multi_cell(0, 5, sanitize_for_pdf(
+        f"Fit percentages, budget/time ranges, and matched skills/traits above are computed, not AI generated. "
+        f"The written summary, rationales, and roadmap text were generated with {REPORT_NARRATIVE_MODEL}."
+    ))
+
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     pdf.output(output_path)
     return output_path
@@ -345,6 +354,7 @@ def export_report_html(structured_profile: dict, report_narrative: dict, grounde
   td.num, th.num {{ text-align: center; white-space: nowrap; }}
   tr.total-row {{ font-weight: 600; background: var(--card-bg); }}
   .idea-meta {{ color: var(--muted); font-size: 0.9rem; margin: 4px 0 8px 0; }}
+  .footnote {{ color: var(--muted); font-size: 0.8rem; font-style: italic; margin-top: 2.5rem; }}
   @media print {{
     body {{ margin: 0; max-width: none; }}
     table {{ break-inside: avoid; }}
@@ -372,6 +382,8 @@ def export_report_html(structured_profile: dict, report_narrative: dict, grounde
   <p class="idea-meta">Budget: &euro;{roadmap_idea['budget_range_eur'][0]:.0f}-{roadmap_idea['budget_range_eur'][1]:.0f} &nbsp;|&nbsp; Time: {roadmap_idea['time_range_hours_per_week'][0]:.0f}-{roadmap_idea['time_range_hours_per_week'][1]:.0f} h/wk</p>
 
   {roadmap_html}
+
+  <p class="footnote">Fit percentages, budget/time ranges, and matched skills/traits above are computed, not AI generated. The written summary, rationales, and roadmap text were generated with {esc(REPORT_NARRATIVE_MODEL)}.</p>
 </body>
 </html>
 """

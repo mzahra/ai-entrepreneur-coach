@@ -164,9 +164,18 @@ def extract_generic_header(header_text: str) -> dict:
     return {"name": name, "headline": headline, "location": location}
 
 
+class ProfilePdfError(Exception):
+    """Raised when the uploaded file cannot be read as a PDF at all."""
+
+
 def parse_profile_pdf(pdf_path: str) -> tuple[dict, dict]:
-    reader = PdfReader(pdf_path)
-    raw_text = "\n".join(page.extract_text() for page in reader.pages)
+    try:
+        reader = PdfReader(pdf_path)
+        raw_text = "\n".join(page.extract_text() for page in reader.pages)
+    except Exception as e:
+        raise ProfilePdfError(
+            "Could not read this file as a PDF. Please upload a valid PDF (LinkedIn export or CV)."
+        ) from e
     raw_text = fix_line_wrapped_hyphens(raw_text)
 
     sections = split_linkedin_sections(raw_text)

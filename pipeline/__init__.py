@@ -22,11 +22,13 @@ from .profile_parsing import (
     canonicalize_sections,
     extract_generic_header,
     parse_profile_pdf,
+    ProfilePdfError,
 )
 
 from .profile_extraction import (
     STRUCTURED_PROFILE_SCHEMA,
     extract_structured_profile,
+    ProfileExtractionError,
 )
 
 from .personality import (
