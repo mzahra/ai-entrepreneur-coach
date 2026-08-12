@@ -52,7 +52,7 @@ The user's written feedback (if any) loops back into `generate_report` only, it 
   - `graph.py`, the two LangGraph graphs described above
   - `full_pipeline.py`, a plain non-graph entry point (`run_full_pipeline`), same steps as one function call
   - `__init__.py`, re-exports everything, so `import pipeline; pipeline.some_function(...)` works without knowing which submodule it lives in
-- `ai-entrepreneur-coach.ipynb`, the O*NET dataset build (occupation selection, enrichment, Pinecone upload) and the original LangGraph prototyping, step by step with inline output
+- `build_dataset.py`, builds the O*NET-derived business idea dataset end to end: filters ~490 occupations, enriches each into a business idea (one OpenAI call each), applies the QA fixes found during development (trait-anchor grounding, budget outlier recalibration, dropping ideas that don't fit a solo/low-budget business, deduping exact name collisions), then embeds and upserts everything to Pinecone. One command (`python build_dataset.py`) to rebuild the dataset from scratch
 - `input/onet/`, the O*NET-derived business idea dataset (`business_ideas_enriched.json`, 463 ideas) and the O*NET source CSVs it was built from
 - `input/`, sample profiles used for testing (`Profile.pdf`, a LinkedIn export, and a plain CV)
 - `output/`, generated reports land here, named `report_<user_name>_<business_idea_name>.pdf` / `.html`
@@ -63,10 +63,18 @@ The user's written feedback (if any) loops back into `generate_report` only, it 
 
 ## Setup
 
-Needs three keys in `.env`: `OPENAI_API_KEY`, `COHERE_API_KEY`, `PINECONE_API_KEY`, and a Pinecone index named `entrepreneur-coach-ideas` already populated (built by `ai-entrepreneur-coach.ipynb`).
+Needs three keys in `.env`: `OPENAI_API_KEY`, `COHERE_API_KEY`, `PINECONE_API_KEY`.
 
 ```
 pip install -r requirements.txt
+```
+
+## Build the dataset (first time only)
+
+The Pinecone index needs to exist and be populated before `app.py` can retrieve anything. `input/onet/business_ideas_enriched.json` (463 ideas) is already committed, so this is only needed if the Pinecone index itself is empty/missing (a fresh Pinecone account, a wiped index), or to regenerate the dataset from scratch. Takes about 15-25 minutes (close to 500 OpenAI calls, one per occupation).
+
+```
+python build_dataset.py
 ```
 
 ## Run it

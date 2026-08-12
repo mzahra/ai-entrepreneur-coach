@@ -8,7 +8,6 @@ This is the one day lab (MVP) proof, this whole `MVP/` folder is the preserved l
 
 - `MVP/pipeline.py`, the actual pipeline: parse PDF, extract structured profile, score TIPI, rank business ideas by computed career best fit, generate report, export PDF
 - `MVP/app.py`, Gradio UI wrapping the pipeline
-- `MVP/mvp-ai-entrepreneur-coach.ipynb`, same pipeline built step by step with inline output at each step
 - `input/business_ideas.json`, the hand curated knowledge base used for ranking (8 entries, MVP scope, Pinecone is the target for Project 3)
 
 ## Input payload
