@@ -10,3 +10,4 @@ extra_info/
 .claude/
 input/
 .DS_Store
+**/*.ipynb
