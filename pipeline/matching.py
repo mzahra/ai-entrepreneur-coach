@@ -1,34 +1,60 @@
 import json
 
 from .clients import get_cohere_client, get_pinecone_index, COHERE_EMBED_MODEL
+from .api_utils import ExternalAPIError, call_with_retries, RETRYABLE_COHERE_ERRORS
 
 FIT_WEIGHTS = {"budget": 0.2, "time": 0.2, "trait": 0.35, "skill": 0.25}
 RETRIEVAL_TOP_K = 30
+LOW_CONFIDENCE_THRESHOLD = 65.0
+# calibrated against real data: strong matches land ~85-90%, and budget_fit/time_fit/trait_fit are lenient
+# enough that even an extreme budget/time mismatch (EUR 1, 0.5h/week) only pushed the composite to ~50%.
+# 65 catches genuine budget/time/trait mismatches without false-triggering on ordinary profiles. Note this
+# threshold can't detect "vague/generic skills text" specifically, skill_fit's own ~0.4-0.6 noise floor
+# (see README known limitations) means it barely moves the composite regardless of match quality.
 
 
 # --- Step 5/6: retrieve candidates from Pinecone, then rank by computed career best fit ---
 
-def build_profile_query_text(structured_profile: dict) -> str:
+def build_profile_query_text(structured_profile: dict, broadened: bool = False) -> str:
+    # broadened drops the specific skills/experience text, which helps a sparse profile (few or
+    # generic skills) surface industry-relevant ideas instead of narrowly (and weakly) skill-matched ones
+    if broadened:
+        return f"{structured_profile['industry']} professional."
     return (
         f"{structured_profile['industry']} professional with skills in {', '.join(structured_profile['skills'])}. "
         f"{structured_profile['experience_summary']}"
     )
 
 
-def retrieve_candidate_ideas(structured_profile: dict, top_k: int = RETRIEVAL_TOP_K) -> list:
+def retrieve_candidate_ideas(structured_profile: dict, top_k: int = RETRIEVAL_TOP_K, broadened: bool = False) -> list:
     co = get_cohere_client()
-    query_text = build_profile_query_text(structured_profile)
-    embed_response = co.embed(
-        texts=[query_text],
-        model=COHERE_EMBED_MODEL,
-        input_type="search_query",
-        embedding_types=["float"],
+    query_text = build_profile_query_text(structured_profile, broadened=broadened)
+    embed_response = call_with_retries(
+        lambda: co.embed(
+            texts=[query_text],
+            model=COHERE_EMBED_MODEL,
+            input_type="search_query",
+            embedding_types=["float"],
+        ),
+        service="Cohere embed (profile query)",
+        retryable_errors=RETRYABLE_COHERE_ERRORS,
     )
+    if not embed_response.embeddings.float_ or not embed_response.embeddings.float_[0]:
+        raise ExternalAPIError("Cohere returned an empty embedding for the profile query.")
     query_embedding = embed_response.embeddings.float_[0]
 
     index = get_pinecone_index()
-    results = index.query(vector=query_embedding, top_k=top_k, include_metadata=True)
-    return [json.loads(match["metadata"]["data"]) for match in results["matches"]]
+    results = call_with_retries(
+        lambda: index.query(vector=query_embedding, top_k=top_k, include_metadata=True),
+        service="Pinecone query",
+    )
+    matches = results.get("matches", [])
+    if not matches:
+        raise ExternalAPIError(
+            "Pinecone returned no candidate business ideas for this profile. "
+            "The index may be empty or unreachable, try running build_dataset.py."
+        )
+    return [json.loads(match["metadata"]["data"]) for match in matches]
 
 
 def lower_bound_fit(value: float, low: float, high: float) -> float:
@@ -57,13 +83,21 @@ def compute_skill_fits(user_skills: list, candidates: list) -> dict:
     # semantic similarity, not literal substring match, so e.g. "PHP"/"C++" register as related to "Programming"
     co = get_cohere_client()
     texts = [", ".join(user_skills)] + [", ".join(idea["skills_needed"]) for idea in candidates]
-    embed_response = co.embed(
-        texts=texts,
-        model=COHERE_EMBED_MODEL,
-        input_type="classification",
-        embedding_types=["float"],
+    embed_response = call_with_retries(
+        lambda: co.embed(
+            texts=texts,
+            model=COHERE_EMBED_MODEL,
+            input_type="classification",
+            embedding_types=["float"],
+        ),
+        service="Cohere embed (skill fits)",
+        retryable_errors=RETRYABLE_COHERE_ERRORS,
     )
     embeddings = embed_response.embeddings.float_
+    if len(embeddings) != len(texts):
+        raise ExternalAPIError(
+            f"Cohere returned {len(embeddings)} embeddings for {len(texts)} inputs while computing skill fits."
+        )
     user_embedding, candidate_embeddings = embeddings[0], embeddings[1:]
     return {
         idea["id"]: max(0.0, cosine_similarity(user_embedding, emb))
@@ -76,13 +110,22 @@ def matched_skills(user_skills: list, idea_skills: list, threshold: float = 0.5)
     if not user_skills or not idea_skills:
         return []
     co = get_cohere_client()
-    embed_response = co.embed(
-        texts=user_skills + idea_skills,
-        model=COHERE_EMBED_MODEL,
-        input_type="classification",
-        embedding_types=["float"],
+    texts = user_skills + idea_skills
+    embed_response = call_with_retries(
+        lambda: co.embed(
+            texts=texts,
+            model=COHERE_EMBED_MODEL,
+            input_type="classification",
+            embedding_types=["float"],
+        ),
+        service="Cohere embed (matched skills)",
+        retryable_errors=RETRYABLE_COHERE_ERRORS,
     )
     embeddings = embed_response.embeddings.float_
+    if len(embeddings) != len(texts):
+        raise ExternalAPIError(
+            f"Cohere returned {len(embeddings)} embeddings for {len(texts)} inputs while matching skills."
+        )
     user_embeddings, idea_embeddings = embeddings[:len(user_skills)], embeddings[len(user_skills):]
     return [
         idea_skill
@@ -120,14 +163,25 @@ def compute_career_best_fit(idea: dict, structured_profile: dict, big_five_score
     }
 
 
-def rank_business_ideas(structured_profile: dict, big_five_scores: dict, budget_eur: float, time_available_hours_per_week: float, top_n: int = 5) -> list:
-    candidates = retrieve_candidate_ideas(structured_profile)
+def rank_candidates(structured_profile: dict, big_five_scores: dict, budget_eur: float, time_available_hours_per_week: float, candidates: list) -> list:
     skill_fits = compute_skill_fits(structured_profile["skills"], candidates)
-    ranked = sorted(
+    return sorted(
         (compute_career_best_fit(idea, structured_profile, big_five_scores, budget_eur, time_available_hours_per_week, skill_fits[idea["id"]]) for idea in candidates),
         key=lambda r: r["career_best_fit_percentage"],
         reverse=True,
     )
+
+
+def rank_business_ideas(structured_profile: dict, big_five_scores: dict, budget_eur: float, time_available_hours_per_week: float, top_n: int = 5) -> list:
+    candidates = retrieve_candidate_ideas(structured_profile)
+    ranked = rank_candidates(structured_profile, big_five_scores, budget_eur, time_available_hours_per_week, candidates)
+
+    # sparse/generic profile: the specific-skills query came back weak, retry once with a broadened
+    # query (industry only) instead of quietly presenting a low-confidence match as a top pick
+    if not ranked or ranked[0]["career_best_fit_percentage"] < LOW_CONFIDENCE_THRESHOLD:
+        candidates = retrieve_candidate_ideas(structured_profile, broadened=True)
+        ranked = rank_candidates(structured_profile, big_five_scores, budget_eur, time_available_hours_per_week, candidates)
+
     top = ranked[:top_n]
     ideas_by_id = {idea["id"]: idea for idea in candidates}
     grounded = []

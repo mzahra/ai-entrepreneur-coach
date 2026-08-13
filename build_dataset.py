@@ -60,8 +60,8 @@ OCCUPATION_CODES = [
 # 2 ideas that came back with a clearly higher budget than the rest of the original 20 batch
 RECALIBRATE_CODES = ["39-9011.00", "37-2012.00"]  # Childcare Workers, Maids and Housekeeping Cleaners
 
-# job categories that translate reasonably to a solo, low budget business, see stack_decision.md /
-# PROJECT_PLAN.md for the reasoning, same filter used to scale from 20 to ~490 candidates
+# job categories that translate reasonably to a solo, low budget business, see DATASET.md for the
+# reasoning, same filter used to scale from 20 to ~490 candidates
 KEEP_MAJOR_GROUPS = ["11", "13", "15", "17", "19", "21", "25", "27", "39", "41", "43", "47", "49"]
 
 # ideas that passed the Job Zone/category filter above but turned out, on inspection, to need
@@ -224,8 +224,8 @@ def enrich_occupation(client, occupation_record, extra_prompt=""):
     return json.loads(response.output_text)
 
 
-# same filter used to scale from the original 20 to ~490 candidates, see stack_decision.md /
-# PROJECT_PLAN.md for why these groups and not others
+# same filter used to scale from the original 20 to ~490 candidates, see DATASET.md for why
+# these groups and not others
 def build_candidate_codes(tables):
     merged = tables["occupation_df"].merge(
         tables["job_zones_df"][["O*NET-SOC Code", "Job Zone"]], on="O*NET-SOC Code", how="left"

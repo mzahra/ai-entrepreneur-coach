@@ -1,5 +1,7 @@
 import json
 
+from .api_utils import ExternalAPIError, call_with_retries, RETRYABLE_OPENAI_ERRORS
+
 CONTENT_SECTIONS = ["Top Skills", "Summary", "Experience", "Projects", "Education"]
 
 
@@ -50,30 +52,39 @@ Projects:
 Education:
 {profile_sections.get('Education', '')}
 """
-    response = client.responses.create(
-        model="gpt-4o-mini",
-        input=[
-            {
-                "role": "system",
-                "content": (
-                    "Extract a structured profile from the given LinkedIn sections. skills should include both "
-                    "explicitly listed skills (Top Skills, KEY SKILLS bullets) and skills clearly implied by the "
-                    "rest of the text, do not rely only on an explicit skills list if one exists. In particular, look "
-                    "at the job titles and descriptions in Experience, not just the Summary: if the person held "
-                    "multiple roles like Trainer, Lecturer, Instructor, or Teacher, or their experience mentions "
-                    "teaching/training courses, include skills like Teaching, Training, Public Speaking, or "
-                    "Curriculum Development, even if those words never appear in an explicit skills list. The same "
-                    "goes for other recurring role patterns (management, writing, sales), a title repeated across "
-                    "several jobs is a real skill signal, do not ignore it just because it is not in a bullet list. "
-                    "years_of_experience should be your best estimate total professional years."
-                ),
-            },
-            {"role": "user", "content": extraction_input},
-        ],
-        temperature=0,
-        text={"format": {"type": "json_schema", "name": "structured_profile", "schema": STRUCTURED_PROFILE_SCHEMA, "strict": True}},
+    response = call_with_retries(
+        lambda: client.responses.create(
+            model="gpt-4o-mini",
+            input=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Extract a structured profile from the given LinkedIn sections. skills should include both "
+                        "explicitly listed skills (Top Skills, KEY SKILLS bullets) and skills clearly implied by the "
+                        "rest of the text, do not rely only on an explicit skills list if one exists. In particular, look "
+                        "at the job titles and descriptions in Experience, not just the Summary: if the person held "
+                        "multiple roles like Trainer, Lecturer, Instructor, or Teacher, or their experience mentions "
+                        "teaching/training courses, include skills like Teaching, Training, Public Speaking, or "
+                        "Curriculum Development, even if those words never appear in an explicit skills list. The same "
+                        "goes for other recurring role patterns (management, writing, sales), a title repeated across "
+                        "several jobs is a real skill signal, do not ignore it just because it is not in a bullet list. "
+                        "years_of_experience should be your best estimate total professional years."
+                    ),
+                },
+                {"role": "user", "content": extraction_input},
+            ],
+            temperature=0,
+            text={"format": {"type": "json_schema", "name": "structured_profile", "schema": STRUCTURED_PROFILE_SCHEMA, "strict": True}},
+        ),
+        service="OpenAI profile extraction",
+        retryable_errors=RETRYABLE_OPENAI_ERRORS,
     )
-    structured_profile = json.loads(response.output_text)
+    if not response.output_text:
+        raise ExternalAPIError("OpenAI returned an empty response while extracting the profile.")
+    try:
+        structured_profile = json.loads(response.output_text)
+    except json.JSONDecodeError as e:
+        raise ExternalAPIError(f"OpenAI returned malformed JSON while extracting the profile: {e}") from e
     structured_profile["name"] = profile_header.get("name", "")
     structured_profile["location"] = profile_header.get("location", "")
     return structured_profile

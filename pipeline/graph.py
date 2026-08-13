@@ -5,7 +5,7 @@ from langgraph.graph import StateGraph, END
 from .profile_parsing import parse_profile_pdf
 from .profile_extraction import extract_structured_profile
 from .personality import score_tipi
-from .matching import retrieve_candidate_ideas, compute_skill_fits, compute_career_best_fit, matched_skills, in_range_traits
+from .matching import retrieve_candidate_ideas, rank_candidates, matched_skills, in_range_traits, LOW_CONFIDENCE_THRESHOLD
 from .reporting import generate_output_report, export_report_pdf, export_report_html, build_report_filename
 
 # --- LangGraph pipeline, wires the functions above into two graphs ---
@@ -24,6 +24,9 @@ class RecommendationState(TypedDict):
     structured_profile: dict
     big_five_scores: dict
     candidate_ideas: list
+    ranked_ideas: list
+    broadened_retrieval: bool
+    low_confidence_match: bool
     grounded_top_ideas: list
 
 
@@ -54,22 +57,30 @@ def build_recommendation_graph(client):
         return {"structured_profile": structured_profile}
 
     def node_retrieve_candidates(state: RecommendationState) -> dict:
-        return {"candidate_ideas": retrieve_candidate_ideas(state["structured_profile"])}
+        candidate_ideas = retrieve_candidate_ideas(state["structured_profile"], broadened=state.get("broadened_retrieval", False))
+        return {"candidate_ideas": candidate_ideas}
 
     def node_rank_by_fit(state: RecommendationState) -> dict:
-        skill_fits = compute_skill_fits(state["structured_profile"]["skills"], state["candidate_ideas"])
-        ranked = sorted(
-            (
-                compute_career_best_fit(
-                    idea, state["structured_profile"], state["big_five_scores"],
-                    state["budget_eur"], state["time_available_hours_per_week"], skill_fits[idea["id"]],
-                )
-                for idea in state["candidate_ideas"]
-            ),
-            key=lambda r: r["career_best_fit_percentage"],
-            reverse=True,
+        ranked_ideas = rank_candidates(
+            state["structured_profile"], state["big_five_scores"],
+            state["budget_eur"], state["time_available_hours_per_week"], state["candidate_ideas"],
         )
-        top = ranked[:5]
+        top_fit = ranked_ideas[0]["career_best_fit_percentage"] if ranked_ideas else 0.0
+        return {"ranked_ideas": ranked_ideas, "low_confidence_match": top_fit < LOW_CONFIDENCE_THRESHOLD}
+
+    def route_after_ranking(state: RecommendationState) -> str:
+        # sparse/generic profile: the specific-skills query came back weak, retry once with a broadened
+        # query (industry only) instead of quietly presenting a low-confidence match as a top pick.
+        # broadened_retrieval guards against looping more than once.
+        if state["low_confidence_match"] and not state.get("broadened_retrieval"):
+            return "broaden"
+        return "finalize"
+
+    def node_broaden_retrieval(state: RecommendationState) -> dict:
+        return {"broadened_retrieval": True}
+
+    def node_finalize_ideas(state: RecommendationState) -> dict:
+        top = state["ranked_ideas"][:5]
         ideas_by_id = {idea["id"]: idea for idea in state["candidate_ideas"]}
         grounded_top_ideas = [
             {
@@ -87,13 +98,17 @@ def build_recommendation_graph(client):
     builder.add_node("extract_profile", node_extract_profile)
     builder.add_node("retrieve_candidates", node_retrieve_candidates)
     builder.add_node("rank_by_fit", node_rank_by_fit)
+    builder.add_node("broaden_retrieval", node_broaden_retrieval)
+    builder.add_node("finalize_ideas", node_finalize_ideas)
 
     builder.set_entry_point("score_personality")
     builder.add_edge("score_personality", "parse_pdf")
     builder.add_edge("parse_pdf", "extract_profile")
     builder.add_edge("extract_profile", "retrieve_candidates")
     builder.add_edge("retrieve_candidates", "rank_by_fit")
-    builder.add_edge("rank_by_fit", END)
+    builder.add_conditional_edges("rank_by_fit", route_after_ranking, {"broaden": "broaden_retrieval", "finalize": "finalize_ideas"})
+    builder.add_edge("broaden_retrieval", "retrieve_candidates")
+    builder.add_edge("finalize_ideas", END)
 
     return builder.compile()
 

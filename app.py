@@ -34,7 +34,7 @@ def rank_ideas(pdf_file, budget_eur, time_available_hours_per_week, *tipi_rating
             "budget_eur": budget_eur,
             "time_available_hours_per_week": time_available_hours_per_week,
         })
-    except (pipeline.ProfilePdfError, pipeline.ProfileExtractionError) as e:
+    except (pipeline.ProfilePdfError, pipeline.ProfileExtractionError, pipeline.ExternalAPIError) as e:
         return str(e), gr.update(choices=[], value=None), None
 
     structured_profile = recommendation_result["structured_profile"]
@@ -42,6 +42,12 @@ def rank_ideas(pdf_file, budget_eur, time_available_hours_per_week, *tipi_rating
     grounded_top_ideas = recommendation_result["grounded_top_ideas"]
 
     lines = ["## Ranked business ideas\n"]
+    if recommendation_result.get("low_confidence_match"):
+        lines.append(
+            "> ⚠️ Your profile had limited skills/experience detail, so even after broadening the "
+            "search these are the closest matches we could find, not confident top picks. Consider "
+            "adding more detail to your CV/LinkedIn export for a stronger match.\n"
+        )
     for r in grounded_top_ideas:
         lines.append(f"**{r['name']}**, career best fit {r['career_best_fit_percentage']}%")
         lines.append(r["description"] + "\n")
@@ -127,7 +133,10 @@ def generate_coaching_report(selected_idea_id, state):
         "feedback_rounds_used": 0,
         "feedback_history": [],
     }
-    coaching_result = coaching_graph.invoke(report_state)
+    try:
+        coaching_result = coaching_graph.invoke(report_state)
+    except pipeline.ExternalAPIError as e:
+        return str(e), None, None, state
     report_narrative = coaching_result["report_narrative"]
     pdf_path = coaching_result["pdf_path"]
     html_path = coaching_result["html_path"]
@@ -169,7 +178,10 @@ def regenerate_with_feedback(feedback_text, report_state):
     # suggest Wix") isn't silently forgotten once a newer, unrelated feedback round comes in
     feedback_history = report_state.get("feedback_history", []) + [feedback_text]
 
-    coaching_result = coaching_graph.invoke({**report_state, "feedback_history": feedback_history})
+    try:
+        coaching_result = coaching_graph.invoke({**report_state, "feedback_history": feedback_history})
+    except pipeline.ExternalAPIError as e:
+        return str(e), gr.update(), gr.update(), report_state
     report_narrative = coaching_result["report_narrative"]
     pdf_path = coaching_result["pdf_path"]
     html_path = coaching_result["html_path"]

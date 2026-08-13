@@ -10,6 +10,11 @@ from .clients import (
     get_pinecone_index,
 )
 
+from .api_utils import (
+    ExternalAPIError,
+    call_with_retries,
+)
+
 from .profile_parsing import (
     LINKEDIN_SECTIONS,
     GENERIC_SECTION_KEYWORDS,
@@ -39,6 +44,7 @@ from .personality import (
 from .matching import (
     FIT_WEIGHTS,
     RETRIEVAL_TOP_K,
+    LOW_CONFIDENCE_THRESHOLD,
     build_profile_query_text,
     retrieve_candidate_ideas,
     lower_bound_fit,
@@ -48,6 +54,7 @@ from .matching import (
     matched_skills,
     in_range_traits,
     compute_career_best_fit,
+    rank_candidates,
     rank_business_ideas,
 )
 

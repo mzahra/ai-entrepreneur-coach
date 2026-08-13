@@ -6,6 +6,7 @@ import html
 from fpdf import FPDF
 
 from .personality import TIPI_ITEMS
+from .api_utils import ExternalAPIError, call_with_retries, RETRYABLE_OPENAI_ERRORS
 
 REPORT_NARRATIVE_MODEL = "gpt-5.6-luna"
 
@@ -121,43 +122,52 @@ Reminder: idea_rationales must contain exactly {len(grounded_top_ideas)} entries
 The 90 day roadmap (roadmap_90_day) is ONLY for the idea the user picked, id "{roadmap_idea['id']}", name "{roadmap_idea['name']}", "
 budget_range_eur {roadmap_idea['budget_range_eur']}, time_range_hours_per_week {roadmap_idea['time_range_hours_per_week']}, not for the others.
 {feedback_block}"""
-    response = client.responses.create(
-        model=REPORT_NARRATIVE_MODEL,
-        input=[
-            {
-                "role": "system",
-                "content": (
-                    "You write the narrative parts of a business idea recommendation report. "
-                    "Address the person directly as \"you\"/\"your\" throughout, like a coach talking to them, not by their name and not in the third person "
-                    "(write \"you should focus on...\", not \"Zahra should focus on...\"). "
-                    "Write in plain, simple English throughout, short sentences, everyday words, this report is read by a general audience "
-                    "including non-native English speakers, avoid business jargon and complex vocabulary (for example say \"you work well with "
-                    "others\" not \"you are an approachable collaborator\", say \"you like trying new things\" not \"you exhibit a penchant for "
-                    "novel experiences\"). "
-                    "The fit percentages are already computed, do not change or restate them as your own judgment. "
-                    "working_style_summary: 2 to 4 short, simple sentences on the person's working style, based on their Big Five scores and "
-                    "experience, explain what the trait means in plain terms rather than naming it clinically (for example \"you stay calm under "
-                    "pressure\" instead of just \"low neuroticism\"). "
-                    "idea_rationales: one entry for EVERY idea in the list, all of them, not just the one the user picked for the roadmap, "
-                    "each a 1 to 2 sentence rationale that references at least two concrete things from the data (matched_skills and/or "
-                    "in_range_traits, name the trait), do not invent skills or traits not present in the data. "
-                    "roadmap_90_day: a 90 day roadmap ONLY for the idea the user picked, identified at the end of the user message by its id and name, "
-                    "not necessarily the top ranked one, one entry per phase (days_1_30, days_31_60, days_61_90). "
-                    "Each phase needs: summary (1 sentence overview of the phase's goal), and action_items, a list of 3 to 5 concrete, specific "
-                    "actions (not vague advice), each with estimated_hours (realistic hours to complete just that action) and estimated_cost_eur "
-                    "(realistic cost in EUR for just that action, 0 if free). Name specific real world places or platforms in the action text where "
-                    "relevant (for example Upwork, Fiverr, LinkedIn, local meetup or coworking groups, relevant subreddits or Slack/Discord "
-                    "communities, industry conferences), matched to the idea's category. "
-                    "Across all 3 phases combined, the sum of estimated_hours per week should roughly stay within time_range_hours_per_week, and the "
-                    "sum of estimated_cost_eur should roughly stay within budget_range_eur, both given for the idea in the user message, do not wildly "
-                    "exceed them without a concrete reason."
-                ),
-            },
-            {"role": "user", "content": report_input},
-        ],
-        text={"format": {"type": "json_schema", "name": "output_report", "schema": OUTPUT_REPORT_SCHEMA, "strict": True}},
+    response = call_with_retries(
+        lambda: client.responses.create(
+            model=REPORT_NARRATIVE_MODEL,
+            input=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You write the narrative parts of a business idea recommendation report. "
+                        "Address the person directly as \"you\"/\"your\" throughout, like a coach talking to them, not by their name and not in the third person "
+                        "(write \"you should focus on...\", not \"Zahra should focus on...\"). "
+                        "Write in plain, simple English throughout, short sentences, everyday words, this report is read by a general audience "
+                        "including non-native English speakers, avoid business jargon and complex vocabulary (for example say \"you work well with "
+                        "others\" not \"you are an approachable collaborator\", say \"you like trying new things\" not \"you exhibit a penchant for "
+                        "novel experiences\"). "
+                        "The fit percentages are already computed, do not change or restate them as your own judgment. "
+                        "working_style_summary: 2 to 4 short, simple sentences on the person's working style, based on their Big Five scores and "
+                        "experience, explain what the trait means in plain terms rather than naming it clinically (for example \"you stay calm under "
+                        "pressure\" instead of just \"low neuroticism\"). "
+                        "idea_rationales: one entry for EVERY idea in the list, all of them, not just the one the user picked for the roadmap, "
+                        "each a 1 to 2 sentence rationale that references at least two concrete things from the data (matched_skills and/or "
+                        "in_range_traits, name the trait), do not invent skills or traits not present in the data. "
+                        "roadmap_90_day: a 90 day roadmap ONLY for the idea the user picked, identified at the end of the user message by its id and name, "
+                        "not necessarily the top ranked one, one entry per phase (days_1_30, days_31_60, days_61_90). "
+                        "Each phase needs: summary (1 sentence overview of the phase's goal), and action_items, a list of 3 to 5 concrete, specific "
+                        "actions (not vague advice), each with estimated_hours (realistic hours to complete just that action) and estimated_cost_eur "
+                        "(realistic cost in EUR for just that action, 0 if free). Name specific real world places or platforms in the action text where "
+                        "relevant (for example Upwork, Fiverr, LinkedIn, local meetup or coworking groups, relevant subreddits or Slack/Discord "
+                        "communities, industry conferences), matched to the idea's category. "
+                        "Across all 3 phases combined, the sum of estimated_hours per week should roughly stay within time_range_hours_per_week, and the "
+                        "sum of estimated_cost_eur should roughly stay within budget_range_eur, both given for the idea in the user message, do not wildly "
+                        "exceed them without a concrete reason."
+                    ),
+                },
+                {"role": "user", "content": report_input},
+            ],
+            text={"format": {"type": "json_schema", "name": "output_report", "schema": OUTPUT_REPORT_SCHEMA, "strict": True}},
+        ),
+        service="OpenAI report generation",
+        retryable_errors=RETRYABLE_OPENAI_ERRORS,
     )
-    return json.loads(response.output_text)
+    if not response.output_text:
+        raise ExternalAPIError("OpenAI returned an empty response while generating the report.")
+    try:
+        return json.loads(response.output_text)
+    except json.JSONDecodeError as e:
+        raise ExternalAPIError(f"OpenAI returned malformed JSON while generating the report: {e}") from e
 
 
 # --- Step 8: export the report as a PDF ---

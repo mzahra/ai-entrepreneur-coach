@@ -2,7 +2,7 @@
 
 A trait based business idea recommender. Takes a LinkedIn PDF export (or a regular CV), a Big Five personality quiz (TIPI), a budget, and time available, then recommends small business ideas ranked by a computed "career best fit" percentage, each with a grounded rationale and a 90 day roadmap for the one the user picks. The user can also give written feedback and regenerate the report, without changing the underlying computed numbers.
 
-This is the **Project 3** full build (4 days). The one day intro lab that came before it is preserved unchanged in `MVP/`. See `PROJECT_PLAN.md` for the full use case, tech stack justification, scope, and risk assessment, `stack_decision.md` for why LangGraph was chosen over n8n, and `gtm_future_sprints.md` for the proposed next steps toward real users.
+This is the **Project 3** full build (4 days). The one day intro lab that came before it is preserved unchanged in `MVP/`. See `PROJECT_PLAN.md` for the full use case, tech stack justification, scope, and risk assessment, `stack_decision.md` for why LangGraph was chosen over n8n, `gtm_future_sprints.md` for the proposed next steps toward real users, and `DATASET.md` for how the 463 business ideas get built from O*NET.
 
 ## Tool list
 
@@ -28,8 +28,11 @@ flowchart TD
         B --> C[extract_profile<br/>OpenAI gpt-4o-mini, structured JSON]
         C --> D[retrieve_candidates<br/>Cohere embed + Pinecone query]
         D --> E[rank_by_fit<br/>budget + time + trait + skill fit]
+        E -->|top fit below 50%<br/>and not retried yet| Br[broaden_retrieval<br/>drop skills, industry-only query]
+        Br --> D
+        E -->|top fit ok, or already retried| Fi[finalize_ideas<br/>matched_skills + in_range_traits]
     end
-    E -->|user picks one idea| F
+    Fi -->|user picks one idea| F
     subgraph "coaching_graph"
         F[generate_report<br/>OpenAI gpt-5.6-luna, rationale + 90 day roadmap] --> G[export_pdf]
         F --> H[export_html]
@@ -52,7 +55,8 @@ The user's written feedback (if any) loops back into `generate_report` only, it 
   - `graph.py`, the two LangGraph graphs described above
   - `full_pipeline.py`, a plain non-graph entry point (`run_full_pipeline`), same steps as one function call
   - `__init__.py`, re-exports everything, so `import pipeline; pipeline.some_function(...)` works without knowing which submodule it lives in
-- `build_dataset.py`, builds the O*NET-derived business idea dataset end to end: filters ~490 occupations, enriches each into a business idea (one OpenAI call each), applies the QA fixes found during development (trait-anchor grounding, budget outlier recalibration, dropping ideas that don't fit a solo/low-budget business, deduping exact name collisions), then embeds and upserts everything to Pinecone. One command (`python build_dataset.py`) to rebuild the dataset from scratch
+- `build_dataset.py`, builds the O*NET-derived business idea dataset end to end: filters ~490 occupations, enriches each into a business idea (one OpenAI call each), applies the QA fixes found during development (trait-anchor grounding, budget outlier recalibration, dropping ideas that don't fit a solo/low-budget business, deduping exact name collisions), then embeds and upserts everything to Pinecone. One command (`python build_dataset.py`) to rebuild the dataset from scratch. See `DATASET.md` for the full explanation of how and why
+- `DATASET.md`, how the 463 business ideas get built from O*NET: occupation selection, what is real data vs LLM estimate, the trait_anchors fix, and the cleanup steps
 - `input/onet/`, the O*NET-derived business idea dataset (`business_ideas_enriched.json`, 463 ideas) and the O*NET source CSVs it was built from
 - `input/`, sample profiles used for testing (`Profile.pdf`, a LinkedIn export, and a plain CV)
 - `output/`, generated reports land here, named `report_<user_name>_<business_idea_name>.pdf` / `.html`
