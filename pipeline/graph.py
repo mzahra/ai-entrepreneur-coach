@@ -119,6 +119,7 @@ def build_coaching_graph(client):
             client, state["structured_profile"], state["big_five_scores"],
             state["budget_eur"], state["time_available_hours_per_week"],
             state["grounded_top_ideas"], state.get("roadmap_idea_id"), state.get("feedback_history"),
+            state.get("report_narrative"),
         )
         return {"report_narrative": report_narrative}
 

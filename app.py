@@ -144,7 +144,7 @@ def generate_coaching_report(selected_idea_id, state):
     roadmap_idea = next((r for r in grounded_top_ideas if r["id"] == selected_idea_id), grounded_top_ideas[0])
     markdown = build_report_markdown(structured_profile, tipi_answers, grounded_top_ideas, report_narrative, roadmap_idea)
 
-    return markdown, pdf_path, html_path, report_state
+    return markdown, pdf_path, html_path, {**report_state, "report_narrative": report_narrative}
 
 
 MAX_FEEDBACK_ROUNDS = 3
@@ -194,7 +194,7 @@ def regenerate_with_feedback(feedback_text, report_state):
         report_state["structured_profile"], report_state["tipi_answers"], grounded_top_ideas, report_narrative, roadmap_idea
     )
 
-    updated_state = {**report_state, "feedback_rounds_used": rounds_used + 1, "feedback_history": feedback_history}
+    updated_state = {**report_state, "feedback_rounds_used": rounds_used + 1, "feedback_history": feedback_history, "report_narrative": report_narrative}
     return markdown, pdf_path, html_path, updated_state
 
 

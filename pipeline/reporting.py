@@ -75,13 +75,24 @@ OUTPUT_REPORT_SCHEMA = {
 
 # --- Step 7: output report ---
 
-def generate_output_report(client, structured_profile: dict, big_five_scores: dict, budget_eur: float, time_available_hours_per_week: float, grounded_top_ideas: list, roadmap_idea_id: str = None, feedback_history: list = None) -> dict:
+def generate_output_report(client, structured_profile: dict, big_five_scores: dict, budget_eur: float, time_available_hours_per_week: float, grounded_top_ideas: list, roadmap_idea_id: str = None, feedback_history: list = None, previous_report: dict = None) -> dict:
     roadmap_idea = next((r for r in grounded_top_ideas if r["id"] == roadmap_idea_id), grounded_top_ideas[0])
 
     feedback_block = ""
     if feedback_history:
         numbered_feedback = "\n".join(f"{i + 1}. {fb}" for i, fb in enumerate(feedback_history))
+        previous_report_block = ""
+        if previous_report:
+            previous_report_block = f"""
+This is the previous version of the report you wrote, in full:
+{json.dumps(previous_report, indent=2)}
+
+Start from this previous version and revise it according to the feedback below. Keep everything from the
+previous version that the feedback does not ask you to change, this is a revision of your own earlier
+text, not a fresh report written from nothing.
+"""
         feedback_block = f"""
+{previous_report_block}
 The user already saw earlier versions of this report and gave feedback, numbered below in the order they
 gave it. ALL of these still apply together, not just the last one, earlier feedback is not replaced by
 later feedback unless a later point specifically contradicts an earlier one (in that case, follow the more
