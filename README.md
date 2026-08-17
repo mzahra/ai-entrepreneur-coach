@@ -69,7 +69,7 @@ The user's written feedback (if any) loops back into `generate_report` only, it 
 
 ## Setup
 
-Copy `.env.example` to `.env` and fill in your own three keys, `OPENAI_API_KEY`, `COHERE_API_KEY`, `PINECONE_API_KEY` (each person running this needs their own accounts/keys, `.env` is gitignored and not shared).
+Copy `.env.example` to `.env` and fill in your three keys, `OPENAI_API_KEY`, `COHERE_API_KEY`, `PINECONE_API_KEY`.
 
 ```
 pip install -r requirements.txt
@@ -111,4 +111,3 @@ Then open `http://127.0.0.1:7860`, upload a profile PDF (LinkedIn export or a re
 See `PROJECT_PLAN.md` Risk Assessment for the full list. The two biggest:
 
 - Budget and time ranges per business idea are still an AI estimate. The AI is guided by two real O*NET signals (`job_zone`, how much training the real job needs, and `typical_work_week_score`, how many hours/week people in that real job tend to work), but O*NET has no direct data on business startup cost or solo side-business time commitment, so those two numbers are a proxy, not a direct measurement.
-- Skill/idea semantic matching (Cohere embeddings) has a natural "noise floor", two unrelated but both professional-sounding skill lists can still score a moderate similarity, not zero.
