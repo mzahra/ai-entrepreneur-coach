@@ -8,6 +8,6 @@ __pycache__/
 extra_info/
 .gradio/
 .claude/
-input/onet/
 .DS_Store
 **/*.ipynb
+input/*.pdf

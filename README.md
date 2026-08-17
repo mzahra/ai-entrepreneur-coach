@@ -55,10 +55,12 @@ The user's written feedback (if any) loops back into `generate_report` only, it 
   - `graph.py`, the two LangGraph graphs described above
   - `full_pipeline.py`, a plain non-graph entry point (`run_full_pipeline`), same steps as one function call
   - `__init__.py`, re-exports everything, so `import pipeline; pipeline.some_function(...)` works without knowing which submodule it lives in
-- `build_dataset.py`, builds the O*NET-derived business idea dataset end to end: filters ~490 occupations, enriches each into a business idea (one OpenAI call each), applies the QA fixes found during development (trait-anchor grounding, budget outlier recalibration, dropping ideas that don't fit a solo/low-budget business, deduping exact name collisions), then embeds and upserts everything to Pinecone. One command (`python build_dataset.py`) to rebuild the dataset from scratch. See `DATASET.md` for the full explanation of how and why
+- `build_dataset.py`, builds the O*NET-derived business idea dataset end to end: filters ~490 occupations, enriches each into a business idea (one OpenAI call each), applies the QA fixes found during development (trait-anchor grounding, budget outlier recalibration, dropping ideas that don't fit a solo/low-budget business, deduping exact name collisions), then embeds and upserts everything to Pinecone. One command (`python build_dataset.py`) to rebuild the dataset from scratch. See `DATASET.md` for the full explanation of how and why. Needs the O*NET source CSVs locally in `input/onet/` (not committed, see O*NET's own site), not needed just to run the app
+- `seed_pinecone.py`, the fast path for a fresh Pinecone account: reads the already-committed `business_ideas_enriched.json`, embeds and upserts it, no OpenAI calls, about a minute
 - `DATASET.md`, how the 463 business ideas get built from O*NET: occupation selection, what is real data vs LLM estimate, the trait_anchors fix, and the cleanup steps
-- `input/onet/`, the O*NET-derived business idea dataset (`business_ideas_enriched.json`, 463 ideas) and the O*NET source CSVs it was built from
+- `input/onet/business_ideas_enriched.json`, the O*NET-derived business idea dataset, 463 ideas, committed so a fresh setup does not need to regenerate it
 - `input/`, sample profiles used for testing (`Profile.pdf`, a LinkedIn export, and a plain CV)
+- `.env.example`, copy to `.env` and fill in your own API keys
 - `output/`, generated reports land here, named `report_<user_name>_<business_idea_name>.pdf` / `.html`
 - `MVP/`, the one day lab build, preserved unchanged as a reference (hand curated 8-idea list, no retrieval, no LangGraph)
 - `PROJECT_PLAN.md`, full project plan (use case, tech stack, scope, risks, phases)
@@ -67,19 +69,23 @@ The user's written feedback (if any) loops back into `generate_report` only, it 
 
 ## Setup
 
-Needs three keys in `.env`: `OPENAI_API_KEY`, `COHERE_API_KEY`, `PINECONE_API_KEY`.
+Copy `.env.example` to `.env` and fill in your own three keys, `OPENAI_API_KEY`, `COHERE_API_KEY`, `PINECONE_API_KEY` (each person running this needs their own accounts/keys, `.env` is gitignored and not shared).
 
 ```
 pip install -r requirements.txt
 ```
 
-## Build the dataset (first time only)
+## Populate Pinecone (first time only, per Pinecone account)
 
-The Pinecone index needs to exist and be populated before `app.py` can retrieve anything. `input/onet/business_ideas_enriched.json` (463 ideas) is already committed, so this is only needed if the Pinecone index itself is empty/missing (a fresh Pinecone account, a wiped index), or to regenerate the dataset from scratch. Takes about 15-25 minutes (close to 500 OpenAI calls, one per occupation).
+The Pinecone index needs to exist and be populated before `app.py` can retrieve anything. `input/onet/business_ideas_enriched.json` (463 ideas) is already committed, so a fresh Pinecone account just needs that data embedded and upserted, no need to regenerate it:
 
 ```
-python build_dataset.py
+python seed_pinecone.py
 ```
+
+Takes about a minute, only Cohere and Pinecone calls, no OpenAI cost. Creates the index if it does not exist yet.
+
+To instead regenerate the dataset itself from scratch (new LLM enrichment over the O*NET source data, not needed just to run the app), see `DATASET.md` and run `build_dataset.py`, that path takes 15-25 minutes and close to 500 OpenAI calls.
 
 ## Run it
 
