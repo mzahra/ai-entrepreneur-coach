@@ -83,7 +83,18 @@ The Pinecone index needs to exist and be populated before `app.py` can retrieve 
 python seed_pinecone.py
 ```
 
-Takes about a minute, only Cohere and Pinecone calls, no OpenAI cost. Creates the index if it does not exist yet.
+Takes about a minute, only Cohere and Pinecone calls, no OpenAI cost. Creates the index if it does not exist yet. Expected output:
+
+```
+[5/6] Embedding 463 ideas with Cohere and upserting to Pinecone...
+     {'dimension': 1536,
+ 'index_fullness': 0.0,
+ 'metric': 'cosine',
+ 'namespaces': {'': {'vector_count': 463}},
+ 'total_vector_count': 463,
+ 'vector_type': 'dense'}
+Seeded 463 ideas into Pinecone index 'entrepreneur-coach-ideas'.
+```
 
 To instead regenerate the dataset itself from scratch (new LLM enrichment over the O*NET source data, not needed just to run the app), see `DATASET.md` and run `build_dataset.py`, that path takes 15-25 minutes and close to 500 OpenAI calls.
 
